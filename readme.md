@@ -20,7 +20,7 @@ If you only want to use the screensaver download the latest executable from [abS
 **System Requirements:**
 - Windows 10 or later (Windows 11 recommended)
 - .NET 10 Runtime or later (LTS - Long Term Support)
-- Modern web browser components (Microsoft Edge WebView2)
+- Microsoft Edge WebView2 Runtime (included with Windows 11, auto-installs on Windows 10)
 
 **Legacy Version:** For Windows 7/8/8.1 support, use the older .NET Framework 4.7.2 version available in the release history.
 
@@ -140,7 +140,7 @@ graph TB
 | **DBConnector.cs** | SQLite database abstraction layer | System.Data.SQLite |
 | **FileDatabase.cs** | Photo catalog and indexing | LINQ to Objects |
 | **ExifToolWrapper.cs** | External EXIF metadata extraction | Process wrapper for exiftool.exe |
-| **Web UI (HTML/JS)** | Browser-based configuration interface | Embedded browser engine |
+| **Web UI (HTML/JS)** | Browser-based configuration interface | WebView2 (Chromium/Edge engine) |
 
 **Project Configuration:**
 - **Target Framework**: `net10.0-windows` (SDK-style project)

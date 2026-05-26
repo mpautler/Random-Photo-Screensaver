@@ -13,7 +13,8 @@ function getQueryStrings(a) {
 	return b;
 }
 
-if (typeof(window.external.InvokeScriptOnMonitor) === "undefined") {
+// Check if running in WebView2 with host object
+if (typeof(window.chrome) === "undefined" || typeof(window.chrome.webview) === "undefined" || typeof(window.chrome.webview.hostObjects) === "undefined" || typeof(window.chrome.webview.hostObjects.config) === "undefined") {
 	if (parent.window.location.href == location.href) {
 		redirect = location.href.replace("abdownloads/rps/data/config.html", "random-photo-screensaver/configuration/");
 		if (redirect != location.href) location.href = redirect;
@@ -31,7 +32,7 @@ var NaturalText = {
 	"currentFilter": "~currentFilter~"
 }
 
-// Fix IE 8 issue
+// Removed IE-specific fix
 NaturalText[null] = "...";
 
 var Filters = function() {

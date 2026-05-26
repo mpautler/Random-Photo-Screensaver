@@ -16,16 +16,16 @@ using System.Collections;
 using Newtonsoft.Json;
 using Microsoft.Win32;
 using System.Net;
+using Microsoft.Web.WebView2.Core;
+using Microsoft.Web.WebView2.WinForms;
 /***
  * 
  * TODO: Reflect changes made in config.html into this.persistant!!!
  * 
- * 
- * 
- * 
- * Consider optimising by storing all values from html in c# array?
- * this.folders: takes 0.0002ms - 0.0005ms
- * this.browser.Document.GetElementById(id).InnerHtml takes 55.1357ms first request and 0.2303ms - 0.3389ms consequtive requests
+ * WebView2 Migration Notes:
+ * - Replaced System.Windows.Forms.WebBrowser with Microsoft.Web.WebView2.WinForms.WebView2
+ * - All DOM operations now use async ExecuteScriptAsync
+ * - JavaScript bridge uses AddHostObjectToScript instead of ObjectForScripting
  * 
  ***/
 
@@ -41,9 +41,13 @@ namespace RPS {
 
         private Dictionary<string, object> persistant;
         DBConnector dbConnector;
-        //SQLiteConnection connection;
 
         private Screensaver screensaver;
+
+        // WebView2 wrappers (synchronous for compatibility during migration)
+        public WebView2SyncWrapper browser;
+        private WebView2SyncWrapper webUpdateCheck;
+        private bool _isWebViewInitialized = false;
 
         private Dictionary<string, object> trackChanges = new Dictionary<string, object>() {
            {"folders", null},
@@ -65,17 +69,15 @@ namespace RPS {
         private bool newVersionAvailable = false;
 
         private Stopwatch downloadProgress = new Stopwatch();
-        //private bool installUpdates = false;
-
-        //public WebBrowser browser;
-
-        //private delegate void AddBrowser();
 
         public Config(Screensaver screensaver) {
             this.screensaver = screensaver;
             this.InitializeComponent();
-            this.browser.ObjectForScripting = this;
-            this.browser.AllowWebBrowserDrop = false;
+
+            // Initialize WebView2 synchronous wrappers
+            browser = new WebView2SyncWrapper(this.webView);
+            webUpdateCheck = new WebView2SyncWrapper(this.webViewUpdateCheck);
+
             foreach (Screen screen in Screen.AllScreens) {
                 this.maxMonitorDimension = Math.Max(Math.Max(this.maxMonitorDimension, screen.Bounds.Width), screen.Bounds.Height);
             }
@@ -83,13 +85,45 @@ namespace RPS {
 
         public SQLiteConnection connectToDB() {
             this.dbConnector = new DBConnector(Constants.selectProgramAppDataFolder(Constants.PersistantConfigFileName), Constants.SettingsDefinition, false);
-            //return new SQLiteConnection("Data Source=" + path + ";Version=3;");
             return this.dbConnector.connection;
         }
 
+        private async void Config_Load(object sender, EventArgs e) {
+            try {
+                // Initialize WebView2 asynchronously with a COM-visible host object
+                var hostObject = new ConfigHostObject(this);
+                await browser.InitializeAsync(hostObject, "config");
+                await webUpdateCheck.InitializeAsync(null);
+
+                // Set up virtual host name mapping for local files
+                // This allows relative paths in HTML (js/, css/, vendor/) to work correctly
+                string dataFolder = Path.GetDirectoryName(Constants.getDataFolder(Constants.ConfigHtmlFile));
+                this.webView.CoreWebView2.SetVirtualHostNameToFolderMapping(
+                    "rps.local", 
+                    dataFolder, 
+                    Microsoft.Web.WebView2.Core.CoreWebView2HostResourceAccessKind.Allow);
+
+                // Set up navigation completed handler
+                this.webView.NavigationCompleted += WebView_NavigationCompleted;
+
+                _isWebViewInitialized = true;
+
+                // Navigate using virtual host name
+                browser.Navigate($"https://rps.local/{Constants.ConfigHtmlFile}");
+            }
+            catch (Exception ex) {
+                MessageBox.Show($"Failed to initialize WebView2: {ex.Message}\n\nPlease ensure WebView2 Runtime is installed.", 
+                    "WebView2 Initialization Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                this.Close();
+            }
+        }
+
         public void saveDebug() {
-            string path = this.browser.Url.LocalPath.Replace(Constants.ConfigHtmlFile, "_C_" + DateTime.Now.ToString("yyyyMMddhhmmss") + ".html");
-            File.WriteAllText(path, this.browser.Document.GetElementsByTagName("HTML")[0].OuterHtml);
+            if (!_isWebViewInitialized) return;
+
+            string path = this.webView.Source.LocalPath.Replace(Constants.ConfigHtmlFile, "_C_" + DateTime.Now.ToString("yyyyMMddhhmmss") + ".html");
+            string html = browser.GetDocumentHTML();
+            File.WriteAllText(path, html);
         }
 
         public string jsFileBrowserDialog(string filename, string filter) {
@@ -173,23 +207,32 @@ namespace RPS {
             }
         }
 
-        public void setBrowserBodyClasses(WebBrowser browser, Screensaver.Actions action) {
-            setBrowserBodyClasses(browser, action, null);
-        }
+        public void SetWebViewBodyClasses(WebView2SyncWrapper wrapper, Screensaver.Actions action, string additionalClasses = null) {
+            if (wrapper == null || !wrapper.IsInitialized) return;
 
-        public static void setBrowserBodyClasses(WebBrowser browser, Screensaver.Actions action, string classes) {
-            HtmlElementCollection elems = browser.Document.GetElementsByTagName("body");
-            foreach (HtmlElement elem in elems) {
-                switch (action) {
-                    case Screensaver.Actions.Preview: classes += " preview"; break;
-                    case Screensaver.Actions.Config: classes += " config"; break;
-                    case Screensaver.Actions.Screensaver: classes += " screensaver"; break;
-                    case Screensaver.Actions.Test: classes += " test"; break;
-                    case Screensaver.Actions.Slideshow: classes += " slideshow"; break;
-                }
-                classes += " IE" + browser.Version.Major;
-                if (browser.Version.Major < 8) classes += " lowIE";
-                elem.SetAttribute("className", elem.GetAttribute("className") + classes);
+            string classes = additionalClasses ?? "";
+            switch (action) {
+                case Screensaver.Actions.Preview: classes += " preview"; break;
+                case Screensaver.Actions.Config: classes += " config"; break;
+                case Screensaver.Actions.Screensaver: classes += " screensaver"; break;
+                case Screensaver.Actions.Test: classes += " test"; break;
+                case Screensaver.Actions.Slideshow: classes += " slideshow"; break;
+            }
+
+            // Add classes to body element
+            var script = $@"
+                (function() {{
+                    var body = document.querySelector('body');
+                    if (body) {{
+                        body.className = body.className + ' {classes.Trim()}';
+                    }}
+                }})();
+            ";
+
+            try {
+                wrapper.ExecuteScript(script);
+            } catch (Exception ex) {
+                Debug.WriteLine($"SetWebViewBodyClasses error: {ex.Message}");
             }
         }
 
@@ -223,9 +266,8 @@ namespace RPS {
             bool gpuRendering = (regvalue != null && (int)regvalue == 1);
             if (this.persistant.ContainsKey("gpuRendering")) this.persistant["gpuRendering"] = gpuRendering;
             else this.persistant.Add("gpuRendering", gpuRendering);
-            
-            //this.browser.Document.InvokeScript("initMonitorsAndFilterCount", new string[] { Convert.ToString(Screen.AllScreens.Length), Convert.ToString(this.persistant["filterNrLines"]) });
-            this.browser.Document.InvokeScript("initMonitors", new string[] { Convert.ToString(Screen.AllScreens.Length) });
+
+            this.browser.InvokeScript("initMonitors", Convert.ToString(Screen.AllScreens.Length));
             
             if (!this.persistant.ContainsKey("folders") || this.persistant["folders"] == null || this.getPersistantString("folders").Trim().Length == 0) { 
                 string path = Environment.GetFolderPath(Environment.SpecialFolder.MyPictures) + Environment.NewLine + 
@@ -268,7 +310,7 @@ namespace RPS {
                 }
             }
 
-            HtmlElementCollection hec = this.GetElementsByTagName("input");
+            WebView2ElementCollection hec = browser.GetElementsByTagName("input");
             foreach (HtmlElement e in hec) {
                 if (this.persistant.ContainsKey(e.GetAttribute("id")) || (e.GetAttribute("type") == "radio" && this.persistant.ContainsKey(e.GetAttribute("name")))) {
                     switch (e.GetAttribute("type")) {
@@ -305,7 +347,7 @@ namespace RPS {
                 }
             }
 
-            hec = this.browser.Document.GetElementsByTagName("textarea");
+            hec = browser.GetElementsByTagName("textarea");
             foreach (HtmlElement e in hec) {
                 if (this.persistant.ContainsKey(e.GetAttribute("id"))) {
                     e.SetAttribute("value", Utils.HtmlDecode(Convert.ToString(this.persistant[e.GetAttribute("id")])));
@@ -314,7 +356,7 @@ namespace RPS {
                 }
             }
 
-            hec = this.browser.Document.GetElementsByTagName("select");
+            hec = browser.GetElementsByTagName("select");
             foreach (HtmlElement e in hec) {
                 if (this.persistant.ContainsKey(e.GetAttribute("id"))) {
                     e.SetAttribute("value", Convert.ToString(this.persistant[e.GetAttribute("id")]));
@@ -327,9 +369,9 @@ namespace RPS {
             if (nrMonitors > 1) classes += "multi ";
             if (this.screensaver.readOnly) classes += "readonly ";
 
-            Config.setBrowserBodyClasses(this.browser, this.screensaver.action, classes);
+            SetWebViewBodyClasses(this.browser, this.screensaver.action, classes);
 
-            this.browser.Document.InvokeScript("persistantConfigLoaded", new string[] { Convert.ToString(Screen.AllScreens.Length) });
+            this.browser.InvokeScript("persistantConfigLoaded", Convert.ToString(Screen.AllScreens.Length));
 
             if (this.screensaver.action == Screensaver.Actions.Preview && this.screensaver.monitors != null) {
                 this.screensaver.monitors[0].defaultShowHide();
@@ -347,7 +389,7 @@ namespace RPS {
         public bool savePersistantConfig() {
             if (this.persistant != null) {
                 this.persistant["effects"] = JsonConvert.SerializeObject(this.effects);
-                this.persistant["filters"] = Convert.ToString(this.browser.Document.InvokeScript("getJsonFilters"));
+                this.persistant["filters"] = Convert.ToString(this.browser.InvokeScript("getJsonFilters"));
                 if (this.screensaver.action != Screensaver.Actions.Config) {
                     for (int i = 0; i < this.screensaver.monitors.Length; i++) {
                         this.persistant["historyM" + Convert.ToString(i)] = JsonConvert.SerializeObject(this.screensaver.monitors[i].historyLastEntries(Convert.ToInt32(this.getPersistant("rememberLast"))));
@@ -378,8 +420,8 @@ namespace RPS {
             MessageBox.Show(Text);
         }
 
-        public HtmlElementCollection GetElementsByTagName(string name) {
-            return (HtmlElementCollection)this.browser.Invoke(new Func<HtmlElementCollection>(() => this.browser.Document.GetElementsByTagName(name)));
+        public WebView2ElementCollection GetElementsByTagName(string name) {
+            return browser.GetElementsByTagName(name);
         }
 
         /****
@@ -609,10 +651,9 @@ namespace RPS {
             return s;
         }
 
-        private HtmlElement getElementById(string id) {
-            // Make thread safe 
+        private WebView2Element getElementById(string id) {
             try {
-                return (HtmlElement)this.browser.Invoke(new Func<HtmlElement>(() => this.browser.Document.GetElementById(id)));
+                return browser.GetElementById(id);
             } catch (Exception e) {
                 Debug.WriteLine("getElementById" + e.Message);
                 return null;
@@ -624,30 +665,11 @@ namespace RPS {
          *  <input type="radio" name="#name# value=...> lines
          ***/
         private string getDomRadioValue(string id) {
-            HtmlElement he = (HtmlElement)this.browser.Invoke(new Func<HtmlElement>(() => this.browser.Document.GetElementById(id)));
-            if (he != null) {
-                HtmlElementCollection hec = he.GetElementsByTagName("input");
-                foreach (HtmlElement e in hec) {
-                    if (e.GetAttribute("type").ToLower() == "radio" && e.GetAttribute("checked").ToLower() == "true") {
-                        return e.GetAttribute("value");
-                    }
-                }
-            }
-            return null;
+            return browser.GetRadioValue(id);
         }
 
         private bool getDomCheckboxValue(string id) {
-            HtmlElement he = this.getElementById(id);
-            if (he == null) return false;
-            switch (he.TagName.ToLower()) {
-                case "input":
-                    return (bool)he.GetAttribute("checked").ToLower().Equals("true");
-                break;
-                default:
-                    Debug.WriteLine("getCheckboxValue called on non checkbox");
-                break;
-            }
-            return false;
+            return browser.GetElementChecked(id);
         }
 
         public bool persistantLoaded() {
@@ -672,12 +694,30 @@ namespace RPS {
         }
 
         public object getPersistant(string key) {
-            if (this.persistant == null || !this.persistant.ContainsKey(key)) throw new KeyNotFoundException(key);
+            if (this.persistant == null) {
+                var ex = new KeyNotFoundException($"Configuration not loaded yet. Attempted to access key: '{key}'");
+                System.Diagnostics.Debug.WriteLine($"[Config] getPersistant KeyNotFoundException: {ex.Message}");
+                throw ex;
+            }
+            if (!this.persistant.ContainsKey(key)) {
+                var ex = new KeyNotFoundException($"Configuration key not found: '{key}'. Available keys: {string.Join(", ", this.persistant.Keys.Take(10))}");
+                System.Diagnostics.Debug.WriteLine($"[Config] getPersistant KeyNotFoundException: {ex.Message}");
+                throw ex;
+            }
             return persistant[key];
         }
 
         public bool getPersistantBool(string key) {
-            if (!this.persistant.ContainsKey(key)) throw new KeyNotFoundException(key);
+            if (this.persistant == null) {
+                var ex = new KeyNotFoundException($"Configuration not loaded yet. Attempted to access key: '{key}'");
+                System.Diagnostics.Debug.WriteLine($"[Config] getPersistantBool KeyNotFoundException: {ex.Message}");
+                throw ex;
+            }
+            if (!this.persistant.ContainsKey(key)) {
+                var ex = new KeyNotFoundException($"Configuration key not found: '{key}'. Available keys: {string.Join(", ", this.persistant.Keys.Take(10))}");
+                System.Diagnostics.Debug.WriteLine($"[Config] getPersistantBool KeyNotFoundException: {ex.Message}");
+                throw ex;
+            }
             if (this.persistant[key].GetType() == typeof(bool)) {
                 return (bool)this.persistant[key];
             }
@@ -731,14 +771,14 @@ namespace RPS {
         }
 
         public void setInnerHTML(string id, string html) {
-            HtmlElement he = this.getElementById(id);
+            WebView2Element he = this.getElementById(id);
             if (he != null) {
                 he.InnerHtml = html;
             }
         }
 
         public void setDomValue(string id, string value) {
-            HtmlElement he = this.getElementById(id);
+            WebView2Element he = this.getElementById(id);
             if (he != null) {
                 switch (he.TagName.ToLower()) {
                     case "textarea":
@@ -771,7 +811,7 @@ namespace RPS {
         }
 
         public string getDomValue(string id) {
-            HtmlElement he = this.getElementById(id);
+            WebView2Element he = this.getElementById(id);
             if (he == null) return null;
             try {
                 switch (he.TagName.ToLower()) {
@@ -808,7 +848,12 @@ namespace RPS {
             } 
         }
 
-        public void ConfigDocumentCompleted(object sender, System.Windows.Forms.WebBrowserDocumentCompletedEventArgs e) {
+        private void WebView_NavigationCompleted(object sender, CoreWebView2NavigationCompletedEventArgs e) {
+            if (!e.IsSuccess) {
+                Debug.WriteLine($"Navigation failed: {e.WebErrorStatus}");
+                return;
+            }
+
             if (this.screensaver.action == Screensaver.Actions.Wallpaper) {
                 this.screensaver.initForScreensaverAndWallpaper();
                 Wallpaper wallpaper = new Wallpaper(this.screensaver);
@@ -818,9 +863,9 @@ namespace RPS {
                 this.screensaver.initializeMonitors();
                 if (!this.configInitialised) {
                     this.setInnerHTML("version", Constants.getNiceVersion());
-                    this.setInnerHTML("versionIE", "(IE:" + this.browser.Version.Major.ToString() + "." + this.browser.Version.Minor.ToString() + ")");
-                    this.browser.Document.InvokeScript("initFancyTreeFolder");
-                    this.browser.Document.InvokeScript("initFancyTreeTransitions");
+                    // Removed versionIE display (IE-specific)
+                    this.browser.InvokeScript("initFancyTreeFolder");
+                    this.browser.InvokeScript("initFancyTreeTransitions");
                     this.configInitialised = true;
                 }
             }
@@ -842,8 +887,8 @@ namespace RPS {
         }
             
         public bool? isUpdateNewer() {
-            if (this.webUpdateCheck.Document != null) {
-                HtmlElement he = this.webUpdateCheck.Document.GetElementById("download");
+            if (webUpdateCheck.IsInitialized) {
+                WebView2Element he = webUpdateCheck.GetElementById("download");
                 if (he != null) {
                     Version update = new Version(he.GetAttribute("data-version"));
                     return (this.screensaver.version.CompareTo(update) < 0);
@@ -853,8 +898,8 @@ namespace RPS {
         }
 
         public string updateFilename() {
-            if (this.webUpdateCheck.Document != null) {
-                HtmlElement he = this.webUpdateCheck.Document.GetElementById("download");
+            if (webUpdateCheck.IsInitialized) {
+                WebView2Element he = webUpdateCheck.GetElementById("download");
                 if (he != null) {
                     return Convert.ToString(Path.Combine(Constants.getUpdateFolder(), Path.GetFileName(he.GetAttribute("href"))));
                 }
@@ -863,8 +908,8 @@ namespace RPS {
         }
 
         public string updateDownloadUrl() {
-            if (this.webUpdateCheck.Document != null) {
-                HtmlElement he = this.webUpdateCheck.Document.GetElementById("download");
+            if (webUpdateCheck.IsInitialized) {
+                WebView2Element he = webUpdateCheck.GetElementById("download");
                 if (he != null) {
                     return he.GetAttribute("href");
                 }
@@ -873,8 +918,8 @@ namespace RPS {
         }
 
         public string updateFileMD5() {
-            if (this.webUpdateCheck.Document != null) {
-                HtmlElement he = this.webUpdateCheck.Document.GetElementById("download");
+            if (webUpdateCheck.IsInitialized) {
+                WebView2Element he = webUpdateCheck.GetElementById("download");
                 if (he != null) {
                     return Convert.ToString(he.GetAttribute("data-md5"));
                 }
@@ -884,8 +929,8 @@ namespace RPS {
         
 
         public void installUpdate() {
-            if (this.webUpdateCheck.Document != null) {
-                HtmlElement he = this.webUpdateCheck.Document.GetElementById("download");
+            if (webUpdateCheck.IsInitialized) {
+                WebView2Element he = webUpdateCheck.GetElementById("download");
                 if (he != null) {
                     try {
                         Utils.RunTaskScheduler(@"Run" + AppSettings.Abbr + "Update", Convert.ToString(Path.Combine(Constants.getUpdateFolder(), Path.GetFileName(he.GetAttribute("href")))), null);
@@ -920,8 +965,7 @@ namespace RPS {
         }
 
         void DownloadFileCompleted(object sender, AsyncCompletedEventArgs e) {
-            //WebBrowser wbCheckUpdate = sender as WebBrowser;
-            HtmlElement he = this.webUpdateCheck.Document.GetElementById("download");
+            WebView2Element he = webUpdateCheck.GetElementById("download");
             string updatePath = Path.Combine(Constants.getUpdateFolder(), Path.GetFileName(he.GetAttribute("href")));
             if (!Utils.VerifyMD5(updatePath, he.GetAttribute("data-md5"))) {
                 // <a href='" + he.GetAttribute("href") + "'>
@@ -941,7 +985,7 @@ namespace RPS {
         }
 
         public void showUpdateInfo(string info) {
-            HtmlElement he = this.browser.Document.GetElementById("update");
+            WebView2Element he = browser.GetElementById("update");
             he.InnerHtml = info.Replace("<br/>", " ");
             if (this.screensaver.action != Screensaver.Actions.Config) {
                 this.screensaver.showUpdateInfo(info);
@@ -955,16 +999,20 @@ namespace RPS {
         }
 
         public string getUpdateVersion() {
-            if (this.webUpdateCheck.Url.Equals(this.getUpdateUri())) {
-                HtmlElement he = this.webUpdateCheck.Document.GetElementById("download");
-                return he.GetAttribute("data-version");
+            if (webUpdateCheck.IsInitialized && webUpdateCheck.WebView.Source != null && webUpdateCheck.WebView.Source.Equals(this.getUpdateUri())) {
+                WebView2Element he = webUpdateCheck.GetElementById("download");
+                if (he != null) {
+                    return he.GetAttribute("data-version");
+                }
             }
             return null;
         }
-        
-        private void webUpdateCheck_DocumentCompleted(object sender, WebBrowserDocumentCompletedEventArgs e) {
-            if (this.webUpdateCheck.Url.Equals(this.getUpdateUri())) {
-                HtmlElement he = this.webUpdateCheck.Document.GetElementById("download");
+
+        private void webViewUpdateCheck_NavigationCompleted(object sender, CoreWebView2NavigationCompletedEventArgs e) {
+            if (!e.IsSuccess) return;
+
+            if (webUpdateCheck.IsInitialized && webUpdateCheck.WebView.Source != null && webUpdateCheck.WebView.Source.Equals(this.getUpdateUri())) {
+                WebView2Element he = webUpdateCheck.GetElementById("download");
                 if (he != null) {
                     Version ignore = null;
                     Version compareTo = this.screensaver.version;
@@ -1041,9 +1089,7 @@ namespace RPS {
                         break;
                 }
                 if (this.checkUpdates) {
-                    //bgwCheckUpdate.DoWork();
-                    //bgwCheckUpdate.RunWorkerAsync();
-                    this.webUpdateCheck.Url = this.getUpdateUri();
+                    webUpdateCheck.Navigate(this.getUpdateUri().ToString());
                 }
             }
         }

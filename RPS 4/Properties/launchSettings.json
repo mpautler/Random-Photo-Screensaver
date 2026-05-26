@@ -1,0 +1,23 @@
+{
+  "profiles": {
+    "RPS 4": {
+      "commandName": "Project"
+    },
+    "RPS-Config": {
+      "commandName": "Project",
+      "commandLineArgs": "/c"
+    },
+    "RPS-ScreenSaver": {
+      "commandName": "Project",
+      "commandLineArgs": "/s"
+    },
+    "RPS-Preview": {
+      "commandName": "Project",
+      "commandLineArgs": "/p"
+    },
+    "RPS-Test": {
+      "commandName": "Project",
+      "commandLineArgs": "/t"
+    }
+  }
+}
