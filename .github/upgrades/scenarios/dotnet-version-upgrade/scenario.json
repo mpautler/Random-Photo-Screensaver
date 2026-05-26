@@ -3,11 +3,14 @@
   "operationId": "9116714f-f89f-43c0-9a0c-e37a918606a5",
   "description": "Upgrade .NET projects to newer .NET versions",
   "startTime": "2026-05-26T14:22:30.4843564Z",
-  "lastUpdateTime": "2026-05-26T14:28:59.4976052Z",
+  "lastUpdateTime": "2026-05-26T14:45:13.6150725Z",
   "properties": {
     "UpgradeTargetFramework": "net10.0",
     "taskStates": {
-      "01-prerequisites": "InProgress"
+      "01-prerequisites": "InProgress",
+      "02-sdk-conversion": "Completed",
+      "03-upgrade-framework": "InProgress",
+      "04-validation": "InProgress"
     }
   },
   "folderPath": ""
