@@ -8,17 +8,11 @@ using System.Threading.Tasks;
 using System.Threading;
 using System.Windows.Forms;
 using System.Diagnostics;
-using System.Security.Permissions;
 using System.Configuration;
 using System.IO;
 using System.Data.SQLite;
-//using System.Data.SQLite.Linq;
-using System.Data.Linq;
 using System.Linq;
-using System.Data.Linq.Mapping;
 using System.Collections;
-//using System.DirectoryServices;
-//using System.Management;
 using Newtonsoft.Json;
 using Microsoft.Win32;
 using System.Net;
@@ -36,7 +30,7 @@ using System.Net;
  ***/
 
 namespace RPS {
-    [PermissionSet(SecurityAction.Demand, Name = "FullTrust")]
+    // Note: PermissionSet removed - Code Access Security is obsolete in modern .NET
     [System.Runtime.InteropServices.ComVisibleAttribute(true)]
 
     public partial class Config : Form {
@@ -99,7 +93,7 @@ namespace RPS {
         }
 
         public string jsFileBrowserDialog(string filename, string filter) {
-            OpenFileDialog dialog = new System.Windows.Forms.OpenFileDialog();
+            System.Windows.Forms.OpenFileDialog dialog = new System.Windows.Forms.OpenFileDialog();
             if (filename == null) filename = "";
             else dialog.InitialDirectory = Path.GetFullPath(filename);
             dialog.FileName = Path.GetFileName(filename);
@@ -209,18 +203,23 @@ namespace RPS {
                 this.screensaver.debugLog.Add("loadPersistantConfig(" + nrMonitors + ")");
             #endif
 
-            //SQLiteConnection connection = 
             this.connectToDB();
             this.persistant = new Dictionary<string, object>();
 
-            DataContext context = new DataContext(this.dbConnector.connection);
-            var items = context.GetTable<Setting>();
-            foreach(Setting item in items) {
-                this.persistant.Add(item.Key, item.Value);
+            // Load settings from SQLite database using raw SQL
+            using (var command = new SQLiteCommand("SELECT key, value FROM Setting", this.dbConnector.connection)) {
+                using (var reader = command.ExecuteReader()) {
+                    while (reader.Read()) {
+                        string key = reader.GetString(0);
+                        string value = reader.GetString(1);
+                        this.persistant.Add(key, value);
+                    }
+                }
             }
+
             if (!this.persistant.ContainsKey("filterNrLines")) this.persistant["filterNrLines"] = 0;
 
-            object regvalue = Registry.GetValue("HKEY_CURRENT_USER\\" + Constants.regkeyGPURendering, Constants.regkeyExecutable, 0);
+            object regvalue = Microsoft.Win32.Registry.GetValue("HKEY_CURRENT_USER\\" + Constants.regkeyGPURendering, Constants.regkeyExecutable, 0);
             bool gpuRendering = (regvalue != null && (int)regvalue == 1);
             if (this.persistant.ContainsKey("gpuRendering")) this.persistant["gpuRendering"] = gpuRendering;
             else this.persistant.Add("gpuRendering", gpuRendering);

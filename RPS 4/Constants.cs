@@ -5,7 +5,6 @@ using System.Threading.Tasks;
 using System.IO;
 using System.Windows.Forms;
 using System.Drawing;
-using System.Data.Linq;
 
 namespace RPS {
     static class Constants {

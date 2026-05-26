@@ -9,7 +9,6 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Runtime.InteropServices;
 using Microsoft.Win32;
-using System.Security.Permissions;
 using System.Linq;
 using System.Diagnostics;
 using System.IO;
@@ -19,7 +18,7 @@ using System.Security.Principal;
 using Microsoft.VisualBasic;
 
 namespace RPS {
-    [PermissionSet(SecurityAction.Demand, Name = "FullTrust")]
+    // Note: PermissionSet removed - Code Access Security is obsolete in modern .NET
     [System.Runtime.InteropServices.ComVisibleAttribute(true)]
     public partial class Monitor : Form {
         static Random rnd = new Random();
