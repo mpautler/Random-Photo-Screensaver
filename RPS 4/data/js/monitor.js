@@ -1,7 +1,7 @@
 /**
- * Define some test files for offline testing (Use Internet Explorer 8+, latest IE recommended)
+ * Define some test files for offline testing (Use modern browser with WebView2)
  **/
-if (typeof(window.external.RunningFromRPS)=== "undefined") {
+if (typeof(window.chrome) === "undefined" || typeof(window.chrome.webview) === "undefined" || typeof(window.chrome.webview.hostObjects) === "undefined" || typeof(window.chrome.webview.hostObjects.monitor) === "undefined") {
 	var i = 0;
 	var a = new Array(
 		{
