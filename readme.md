@@ -58,22 +58,108 @@ This is the second complete rewrite of RPS in almost 10 years. When I choose for
 
 I'm a [web developer](http://www.exadium.com) by day and software developer at night, basing the display on browser technology should make it easier for 3rd parties to develop plugins for things as transitions and other features. How the photos are shown should be completely customised in the final RPS 4 version.
 
-Structure
----------
-- Launcher
-- RPS 4
-    - data (%programdata%\Random Photo Screensaver)
-    	- config.html
-    	- monitor.html
-    		- css
-    		- images
-    		- js
-    		- vendor
-    - database (%programdata%\Random Photo Screensaver)
-        - settings.sqlite
-        - store.sqlite
-        - meta.sqlite
-    	Alternative location for personalised settings files is "%localappdata%\Random Photo Screensaver"
+## Structure
+
+### Folder Organization
+```
+Random-Photo-Screensaver/
+??? RPS Launcher/              # Windows folder resident launcher (minimal footprint)
+?   ??? RPS Launcher.sln       # Separate project for launcher
+??? RPS 4/                     # Main screensaver installation folder
+    ??? RPS 4.csproj           # SDK-style .NET 10 project
+    ??? data/                  # Web UI resources
+    ?   ??? config.html        # Configuration interface
+    ?   ??? monitor.html       # Display/preview interface
+    ?   ??? css/               # Styling
+    ?   ??? js/                # Client-side logic & effects
+    ?   ??? vendor/            # Third-party libraries (jQuery, FancyTree, etc.)
+    ??? vendor/                # Runtime dependencies (exiftool.exe)
+```
+
+**User Data Locations:**
+- **Settings**: `%programdata%\Random Photo Screensaver\` (system-wide)
+  - `settings.sqlite` - User preferences
+  - `store.sqlite` - Cached metadata
+  - `meta.sqlite` - Image metadata cache
+- **Alternative**: `%localappdata%\Random Photo Screensaver\` (user-specific overrides)
+
+### .NET Project Architecture
+
+**RPS 4** is a modern **Windows Desktop Application** (.NET 10 LTS) with a layered architecture:
+
+```mermaid
+graph TB
+    subgraph Presentation["Presentation Layer"]
+        Config["Config.cs<br/>(WinForms Configuration UI)"]
+        Monitor["Monitor.cs<br/>(WinForms Display)"]
+        RPS["RPS.cs<br/>(Entry Point & WPF/WinForms Host)"]
+    end
+
+    subgraph Business["Business Logic Layer"]
+        Wallpaper["Wallpaper.cs<br/>(Display Management)"]
+        Metadata["Metadata.cs<br/>(Image Info)"]
+        Utils["Utils.cs<br/>(Utilities)"]
+        ExifTool["ExifToolWrapper.cs<br/>(EXIF Data)"]
+    end
+
+    subgraph Data["Data Access Layer"]
+        DBConnector["DBConnector.cs<br/>(SQLite Connection)"]
+        DBTableDef["DBTableDefinition.cs<br/>(Schema)"]
+        FileDB["FileDatabase.cs<br/>(File Catalog)"]
+        FileNodes["FileNodes.cs<br/>(File Tree)"]
+    end
+
+    subgraph WebUI["Web UI Layer"]
+        HTML["config.html, monitor.html"]
+        JS["JavaScript<br/>(config.js, monitor.js)"]
+        CSS["CSS Styling"]
+        Vendor["jQuery, FancyTree,<br/>Spectrum, Moment.js"]
+    end
+
+    Config -->|Uses| Business
+    Monitor -->|Uses| Business
+    RPS -->|Launches| Presentation
+
+    Business -->|Reads/Writes| Data
+    Business -->|Queries| ExifTool
+
+    Data -->|SQLite| DBConnector
+
+    Presentation -->|Hosts| WebUI
+    JS -->|Depends on| Vendor
+    CSS -->|Styles| HTML
+```
+
+**Key Component Roles:**
+
+| Component | Purpose | Technology |
+|-----------|---------|-----------|
+| **RPS.cs** | Main entry point, application lifecycle | .NET WinForms/WPF |
+| **Config.cs & Monitor.cs** | User interfaces for configuration and preview | WinForms Windows Forms |
+| **Wallpaper.cs** | Display and rendering management | Windows API interop |
+| **DBConnector.cs** | SQLite database abstraction layer | System.Data.SQLite |
+| **FileDatabase.cs** | Photo catalog and indexing | LINQ to Objects |
+| **ExifToolWrapper.cs** | External EXIF metadata extraction | Process wrapper for exiftool.exe |
+| **Web UI (HTML/JS)** | Browser-based configuration interface | Embedded browser engine |
+
+**Project Configuration:**
+- **Target Framework**: `net10.0-windows` (SDK-style project)
+- **Output Type**: `WinExe` (Windows desktop application)
+- **UI Frameworks**: Both WinForms & WPF support enabled
+- **Architecture**: x86 (32-bit) optimized for screensaver compatibility
+- **Key Features**:
+  - Modern C# language features (nullable reference types, pattern matching)
+  - Windows Forms desktop UI + embedded web UI
+  - SQLite for local data persistence
+  - EXIF metadata extraction via external tool
+  - Multi-monitor support
+  - Photo slideshow with transition effects
+
+**RPS Launcher** is a separate, lightweight Windows Screensaver Launcher that:
+- Resides in the Windows system folder (`%Windows%\System32\`)
+- Launches the main RPS 4 application with minimal footprint
+- Separates screensaver registration from core functionality
+- Keeps Windows folder clean from application libraries
 
 Credits
 -------
