@@ -105,12 +105,11 @@
     <PackageReference Include="TaskScheduler" Version="2.12.2" />
   </ItemGroup>
   <PropertyGroup>
-    <PostBuildEvent>call "$(DevEnvDir)..\Tools\vsvars32.bat"
-IF NOT EXIST "$(TargetDir)vendor" MKDIR "$(TargetDir)vendor"
-xcopy /d /s "$(ProjectDir)vendor\*.*" "$(TargetDir)vendor"
-rem IF NOT EXIST "$(TargetDir)data" MKDIR "$(TargetDir)data"
-rem xcopy /d /s "$(ProjectDir)data\*.*" "$(TargetDir)data"
-
-mt.exe -manifest "$(ProjectDir)app.manifest" -updateresource:"$(TargetDir)$(TargetName).exe";#1</PostBuildEvent>
+    <!-- Post-build event disabled - needs manual review of paths
+    <PostBuildEvent>IF EXIST "$(ProjectDir)vendor" (
+  IF NOT EXIST "$(TargetDir)vendor" MKDIR "$(TargetDir)vendor"
+  xcopy /d /s /y /i "$(ProjectDir)vendor\*" "$(TargetDir)vendor\"
+)</PostBuildEvent>
+    -->
   </PropertyGroup>
 </Project>
