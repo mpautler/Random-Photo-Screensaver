@@ -1,11 +1,11 @@
 Random Photo Screensaver(tm) 4
 ==========================
 
-Random Photo Screensaver 4 (RPS4) is a photo slideshow screensaver written in Visual Studio C#. 
+Random Photo Screensaver 4 (RPS4) is a photo slideshow screensaver written in Visual Studio C#, now upgraded to .NET 10 (LTS). 
 
 Download / preview
 ------------------
-You can download the latest executable for Windows 7 & 8/8.1 from [abScreensavers.com](http://www.abscreensavers.com/random-photo-screensaver). This also showcases some of its many features.
+You can download the latest executable for Windows 10/11 from [abScreensavers.com](http://www.abscreensavers.com/random-photo-screensaver). This also showcases some of its many features.
 
 Structure
 ---------
@@ -17,21 +17,40 @@ Installation
 ------------
 If you only want to use the screensaver download the latest executable from [abScreensavers.com](http://www.abscreensavers.com/random-photo-screensaver). 
 
-RPS requires .Net 4.7.2 and Internet Explorer 8 (the latest version of IE is recommended though) - You can compile it with a lower version of .NET 4.0 for Windows XP and Vista compatibility.
+**System Requirements:**
+- Windows 10 or later (Windows 11 recommended)
+- .NET 10 Runtime or later (LTS - Long Term Support)
+- Modern web browser components (Microsoft Edge WebView2)
+
+**Legacy Version:** For Windows 7/8/8.1 support, use the older .NET Framework 4.7.2 version available in the release history.
 
 Compiling from source
 ---------------------
-The following instruction are how to compile RPS from source in Microsoft Visual Studio C# 2015. The Express Edition can be downloaded for free from: http://www.visualstudio.com/downloads/download-visual-studio-vs
+The following instructions are for compiling RPS from source in Microsoft Visual Studio 2022 or later. The Community Edition can be downloaded for free from: https://visualstudio.microsoft.com/downloads/
+
+**Requirements:**
+- Visual Studio 2022 or later
+- .NET 10 SDK (LTS)
+- Windows 10/11 SDK
+
+**Steps:**
 - Download the source files from https://github.com/marijnkampf/Random-Photo-Screensaver/tree/RPS4
 - Open RPS 4.sln
-- Compile
- 
+- Restore NuGet packages
+- Build solution
+
 History
 -------
 - 2005: RPS 1 & 2 written in Delphi
 - 2008: RPS 3 written in Visual Studio C++
 - 2014: RPS 4 written in Visual Studio C#
     - See http://www.abscreensavers.com/random-photo-screensaver/version-information/ for full list of 4.X releases.
+- **2025: RPS 4 upgraded to .NET 10 (LTS)**
+    - Modern SDK-style project format
+    - Security updates (Newtonsoft.Json CVE-2024-30105 fixed)
+    - Compatible SQLite packages
+    - Removed obsolete Code Access Security
+    - Windows 10/11 optimized
 
 Design rationale
 ----------------
