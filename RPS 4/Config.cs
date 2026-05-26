@@ -358,7 +358,7 @@ namespace RPS {
                 this.connectToDB();
                 SQLiteTransaction transaction = null;
                 try {
-                    transaction = this.dbConnector.connection.BeginTransaction(true);
+                    transaction = this.dbConnector.connection.BeginTransaction();
                 } catch (System.Data.SQLite.SQLiteException se) {
                     this.screensaver.showInfoOnMonitors("Error: " + se.Message, true);
                     return false;
@@ -998,7 +998,9 @@ namespace RPS {
                                 if (File.Exists(downloadedUpdateLocalPath)) File.Delete(downloadedUpdateLocalPath);
                                 this.showUpdateInfo("<div class='downloadProgress'><div class='downloadLabel'>Downloading update: " + update.ToString() + "</div><div class='downloadProgress' style='width: 0%'></div>");
                                 Directory.CreateDirectory(Path.GetDirectoryName(downloadedUpdateLocalPath));//.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), Constants.DownloadFolder));
+#pragma warning disable SYSLIB0014 // WebClient is obsolete - TODO: migrate to HttpClient
                                 WebClient client = new WebClient();
+#pragma warning restore SYSLIB0014
                                 client.DownloadFileCompleted += new AsyncCompletedEventHandler(DownloadFileCompleted);
                                 client.DownloadProgressChanged += new DownloadProgressChangedEventHandler(DownloadProgress);
                                 client.DownloadFileAsync(new Uri(he.GetAttribute("href")), downloadedUpdateLocalPath);

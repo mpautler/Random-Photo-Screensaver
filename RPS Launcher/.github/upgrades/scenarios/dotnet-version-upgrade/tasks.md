@@ -8,7 +8,7 @@ Upgrading RPS Launcher.sln (single Windows Forms project) from .NET Framework 4.
 
 ## Tasks
 
-- ?? 01-prerequisites: Verify SDK and tooling compatibility
-- ?? 02-sdk-conversion: Convert project to SDK-style format
-- ?? 03-upgrade-framework: Update target framework to net10.0-windows
-- ?? 04-validation: Final validation and documentation
+- 🔲 01-prerequisites: Verify SDK and tooling compatibility
+- 🔲 02-sdk-conversion: Convert project to SDK-style format
+- 🔲 03-upgrade-framework: Update target framework to net10.0-windows
+- 🔲 04-validation: Final validation and documentation

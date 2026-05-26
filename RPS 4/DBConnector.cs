@@ -152,7 +152,7 @@ namespace RPS {
                                 MessageBox.Show("The database file '" + filename + "' is locked" + Environment.NewLine + "Unlock database and try again.", "Database file locked", MessageBoxButtons.OK, MessageBoxIcon.Error);
                                 Application.Exit();
                             }
-                            throw se;
+                            throw; // Re-throw without losing stack trace
                         }
                         return filePersists;
                     }
