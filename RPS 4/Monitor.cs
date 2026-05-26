@@ -119,7 +119,8 @@ namespace RPS {
                 string classes = "monitor" + (this.id + 1);
                 if (this.screensaver.monitors.Length > 1) classes += " multimonitor";
                 if (this.screensaver.readOnly) classes += " readonly";
-                Config.setBrowserBodyClasses(this.browser, this.screensaver.action, classes);
+                // TODO: Update Monitor.cs to use WebView2 (Phase 3 of migration)
+                // Config.SetWebViewBodyClasses(...) needs to be called here after Monitor migrates to WebView2
                 
                 this.browser.Document.GetElementById("identify").InnerText = Convert.ToString(this.id+1);
                 this.browser.Show();

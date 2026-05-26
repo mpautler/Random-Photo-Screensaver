@@ -68,10 +68,10 @@ namespace RPS {
             this.hwnds = hwnds;
             this.config = new Config(this);
             this.config.PreviewKeyDown += new System.Windows.Forms.PreviewKeyDownEventHandler(this.PreviewKeyDown);
-            this.config.browser.PreviewKeyDown += new System.Windows.Forms.PreviewKeyDownEventHandler(this.PreviewKeyDown);
+            // WebView2: PreviewKeyDown event handled differently - events are handled in WebView2 via JavaScript
 
-            this.config.browser.Navigate(new Uri(Constants.getDataFolder(Constants.ConfigHtmlFile)));
-            this.config.browser.DocumentCompleted += new System.Windows.Forms.WebBrowserDocumentCompletedEventHandler(this.config.ConfigDocumentCompleted);
+            this.config.browser.Navigate(Constants.getDataFolder(Constants.ConfigHtmlFile));
+            // WebView2: NavigationCompleted event is handled inside Config.cs (WebView_NavigationCompleted)
             if (this.action == Actions.Config) this.config.Show();
             else {
                 if (this.action != Actions.Wallpaper) {
@@ -81,30 +81,6 @@ namespace RPS {
                 }
             }
             // Wait for config document to load to complete initialisation: Config.ConfigDocumentCompleted()
-        }
-
-        public static bool checkBrowserVersionOk() {
-            if ((new WebBrowser()).Version.Major < 8) {
-                MessageBoxManager.Yes = "Upgrade";
-                MessageBoxManager.No = "Continue";
-                MessageBoxManager.Register();
-
-                switch (MessageBox.Show("RPS requires Internet Explorer 8 or later" + Environment.NewLine + Environment.NewLine + "Open Internet Explorer download page?", "Upgrade Internet Explorer?", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Warning)) {
-                    //this.ExitThread();
-                    //Environment.Exit(1);
-                    case DialogResult.Yes:
-                        Process.Start("explorer.exe", "http://windows.microsoft.com/en-us/internet-explorer/download-ie");
-                        Application.Exit();
-                        return false;
-                    break;
-                    case DialogResult.Cancel:
-                        Application.Exit();
-                        return false;
-                    break;
-                }
-                MessageBoxManager.Unregister();
-            }
-            return true;
         }
 
         public void appendDebugFile(int monitor, string log) {
@@ -159,7 +135,9 @@ namespace RPS {
             //MessageBox.Show("ConfigDocumentCompleted:" + this.action.ToString());
             if (this.action != Actions.Config && this.action != Actions.Wallpaper) {
                 // Complete initialisation when config.html is loaded.
-                if (!this.configInitialised && this.config.browser.Url.Segments.Last().Equals(Constants.ConfigHtmlFile)) {
+                if (!this.configInitialised && this.config.browser.IsInitialized && 
+                    this.config.browser.WebView.Source != null && 
+                    this.config.browser.WebView.Source.Segments.Last().Equals(Constants.ConfigHtmlFile)) {
                     this.initForScreensaverAndWallpaper();
                     System.Drawing.Color backgroundColour = System.Drawing.ColorTranslator.FromHtml(this.config.getPersistantString("backgroundColour"));
                     int i = 0;
@@ -1055,10 +1033,7 @@ namespace RPS {
                 }
             }
             bool readOnly = Screensaver.singleProcess(action);
-            if (!Screensaver.checkBrowserVersionOk()) {
-                Application.Exit();
-                return;
-            }
+            // Removed IE version check - WebView2 handles browser compatibility
 
             Screensaver screensaver = new Screensaver(action, readOnly, hwnds);
             AppDomain.CurrentDomain.UnhandledException += new UnhandledExceptionEventHandler(screensaver.CleanUpOnException);
