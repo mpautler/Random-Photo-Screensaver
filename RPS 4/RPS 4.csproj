@@ -101,6 +101,14 @@
       <Link>vendor\exiftool.exe</Link>
     </None>
   </ItemGroup>
+  <ItemGroup>
+    <None Update="data\config.html">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="data\monitor.html">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
   <PropertyGroup>
   </PropertyGroup>
 </Project>
