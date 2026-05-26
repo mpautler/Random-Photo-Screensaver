@@ -107,12 +107,6 @@
     </None>
   </ItemGroup>
   <ItemGroup>
-    <!-- Copy entire data folder structure to output -->
-    <None Update="data\**\*.*">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <!-- Legacy individual file entries below kept for reference but covered by wildcard above -->
-    <!--
     <None Update="data\config.html">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
@@ -194,7 +188,6 @@
     <None Update="data\monitor.html">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
-    -->
     <None Update="Properties\Settings.settings">
       <Generator>SettingsSingleFileGenerator</Generator>
       <LastGenOutput>Settings.Designer.cs</LastGenOutput>

@@ -68,10 +68,10 @@ namespace RPS {
             this.hwnds = hwnds;
             this.config = new Config(this);
             this.config.PreviewKeyDown += new System.Windows.Forms.PreviewKeyDownEventHandler(this.PreviewKeyDown);
-            // WebView2: PreviewKeyDown event handled differently - events are handled in WebView2 via JavaScript
 
-            this.config.browser.Navigate(Constants.getDataFolder(Constants.ConfigHtmlFile));
-            // WebView2: NavigationCompleted event is handled inside Config.cs (WebView_NavigationCompleted)
+            // WebView2: Navigation happens in Config_Load after initialization
+            // this.config.browser.Navigate() is now called after WebView2 is initialized
+
             if (this.action == Actions.Config) this.config.Show();
             else {
                 if (this.action != Actions.Wallpaper) {
@@ -154,17 +154,19 @@ namespace RPS {
                             this.monitors[i] = new Monitor(hwnds[i], i, this);
                             this.monitors[i].FormClosed += new FormClosedEventHandler(this.OnFormClosed);
                             this.monitors[i].PreviewKeyDown += new System.Windows.Forms.PreviewKeyDownEventHandler(this.PreviewKeyDown);
-                            this.monitors[i].browser.PreviewKeyDown += new System.Windows.Forms.PreviewKeyDownEventHandler(this.PreviewKeyDown);
+                            // WebView2: Keyboard events are handled differently - events are handled in WebView2 via JavaScript
+                            // this.monitors[i].browser.PreviewKeyDown += new System.Windows.Forms.PreviewKeyDownEventHandler(this.PreviewKeyDown);
                             this.monitors[i].Show();
                         }
                     } else {
                         this.monitors = new Monitor[Screen.AllScreens.Length];
                         foreach (Screen screen in Screen.AllScreens) {
                             this.monitors[i] = new Monitor(screen.Bounds, i, this);
-                            this.monitors[i].browser.PreviewKeyDown += new System.Windows.Forms.PreviewKeyDownEventHandler(this.PreviewKeyDown);
+                            // WebView2: Keyboard events are handled differently - events are handled in WebView2 via JavaScript
+                            // this.monitors[i].browser.PreviewKeyDown += new System.Windows.Forms.PreviewKeyDownEventHandler(this.PreviewKeyDown);
                             this.monitors[i].PreviewKeyDown += new System.Windows.Forms.PreviewKeyDownEventHandler(this.PreviewKeyDown);
-                            // Avoid white flash by hiding browser and setting form background colour. (Focus on browser on DocumentCompleted to process keystrokes)
-                            this.monitors[i].browser.Hide();
+                            // WebView2: browser.Hide() not needed - WebView2 has proper initialization
+                            // this.monitors[i].browser.Hide();
                             try {
                                 this.monitors[i].BackColor = backgroundColour;
                             } catch (System.ArgumentException ae) { }
@@ -178,7 +180,34 @@ namespace RPS {
         }
 
         private void CleanUpOnException(object sender, UnhandledExceptionEventArgs args) {
-            this.fileNodes.OnExitCleanUp();
+            Exception ex = (Exception)args.ExceptionObject;
+
+            // Log detailed exception information
+            string errorMessage = $"[UnhandledException] {ex.GetType().Name}: {ex.Message}\n\nStack Trace:\n{ex.StackTrace}";
+
+            if (ex.InnerException != null) {
+                errorMessage += $"\n\nInner Exception: {ex.InnerException.GetType().Name}: {ex.InnerException.Message}\n{ex.InnerException.StackTrace}";
+            }
+
+            System.Diagnostics.Debug.WriteLine(errorMessage);
+
+            // Also write to a log file for debugging
+            try {
+                string logPath = Path.Combine(Constants.selectProgramAppDataFolder(""), "crash.log");
+                File.AppendAllText(logPath, $"\n\n=== {DateTime.Now} ===\n{errorMessage}\n");
+            } catch {
+                // Ignore errors writing to log file
+            }
+
+            // Show error to user if debugging or in config mode
+            if (System.Diagnostics.Debugger.IsAttached || this.action == Actions.Config) {
+                MessageBox.Show(errorMessage, "Unhandled Exception", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+
+            // Clean up file nodes
+            if (this.fileNodes != null) {
+                this.fileNodes.OnExitCleanUp();
+            }
         }
 
         private void MonitorsAndConfigReady() {
@@ -574,7 +603,7 @@ namespace RPS {
                         case Keys.I:
                             for (int i = 0; i < this.monitors.Length; i++) {
                                 if (this.currentMonitor == CM_ALL || this.currentMonitor == i) {
-                                    this.monitors[i].browser.Document.InvokeScript("identify");
+                                    this.monitors[i].browser.InvokeScript("identify");
                                 }
                             }
                         break;
@@ -704,7 +733,7 @@ namespace RPS {
                         case Keys.D0:
                             this.currentMonitor = CM_ALL;
                             for (int i = 0; i < this.monitors.Length; i++) {
-                                this.monitors[i].browser.Document.InvokeScript("identify");
+                                this.monitors[i].browser.InvokeScript("identify");
                                 this.monitors[i].showInfoOnMonitor("Offset (" + this.monitors[i].offset + ")");
                             }
                             break;
@@ -714,7 +743,7 @@ namespace RPS {
                             int monitorId = e.KeyValue-49;
                             if (monitorId < this.monitors.Length) {
                                 this.currentMonitor = monitorId;
-                                this.monitors[monitorId].browser.Document.InvokeScript("identify");
+                                this.monitors[monitorId].browser.InvokeScript("identify");
                                 this.monitors[monitorId].showInfoOnMonitor("Offset (" + this.monitors[monitorId].offset + ")");
                             }
                         break;
@@ -957,7 +986,36 @@ namespace RPS {
             Cursor.Hide();
             this.mouseMoveTimer.Enabled = false;
         }
-   
+
+        /// <summary>
+        /// Handler for UI thread exceptions
+        /// </summary>
+        static void Application_ThreadException(object sender, ThreadExceptionEventArgs e) {
+            Exception ex = e.Exception;
+
+            // Log detailed exception information
+            string errorMessage = $"[ThreadException] {ex.GetType().Name}: {ex.Message}\n\nStack Trace:\n{ex.StackTrace}";
+
+            if (ex.InnerException != null) {
+                errorMessage += $"\n\nInner Exception: {ex.InnerException.GetType().Name}: {ex.InnerException.Message}\n{ex.InnerException.StackTrace}";
+            }
+
+            System.Diagnostics.Debug.WriteLine(errorMessage);
+
+            // Also write to a log file for debugging
+            try {
+                string logPath = Path.Combine(Constants.selectProgramAppDataFolder(""), "crash.log");
+                File.AppendAllText(logPath, $"\n\n=== {DateTime.Now} ===\n{errorMessage}\n");
+            } catch {
+                // Ignore errors writing to log file
+            }
+
+            // Show error to user when debugging
+            if (System.Diagnostics.Debugger.IsAttached) {
+                MessageBox.Show(errorMessage, "Thread Exception", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
         /// <summary>
         /// The main entry point for the application.
         /// </summary>
@@ -967,8 +1025,13 @@ namespace RPS {
             IntPtr previewHwnd = IntPtr.Zero;
             IntPtr[] hwnds;
             Actions action = Actions.Screensaver;
+
+            // Set up exception handlers
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
+            Application.ThreadException += Application_ThreadException;
+            Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+
             hwnds = null;
             if (args.Length > 0) {
                 string arg1 = args[0].ToLower().Trim();
@@ -1047,7 +1110,8 @@ namespace RPS {
                     screensaver.monitors[0] = new Monitor(hwnds[0], 0, screensaver);
                     screensaver.monitors[0].FormClosed += new FormClosedEventHandler(screensaver.OnFormClosed);
                     screensaver.monitors[0].PreviewKeyDown += new System.Windows.Forms.PreviewKeyDownEventHandler(screensaver.PreviewKeyDown);
-                    screensaver.monitors[0].browser.PreviewKeyDown += new System.Windows.Forms.PreviewKeyDownEventHandler(screensaver.PreviewKeyDown);
+                    // WebView2: Keyboard events are handled differently - events are handled in WebView2 via JavaScript
+                    // screensaver.monitors[0].browser.PreviewKeyDown += new System.Windows.Forms.PreviewKeyDownEventHandler(screensaver.PreviewKeyDown);
                     Application.Run(screensaver.monitors[0]);
                 break;
                 default:

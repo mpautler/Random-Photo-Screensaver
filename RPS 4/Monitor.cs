@@ -25,6 +25,10 @@ namespace RPS {
         private int id;
         private Screensaver screensaver;
 
+        // WebView2 wrapper for browser operations
+        internal WebView2SyncWrapper browser;
+        private bool _isWebViewInitialized = false;
+
         public string info = "";
         private string priorityInfo = "";
 
@@ -70,13 +74,14 @@ namespace RPS {
 
         public Monitor(int id, Screensaver screensaver) {
             InitializeComponent();
-//            MessageBox.Show("Monitor: " + id);
-            this.browser.Url = new Uri(Constants.getDataFolder(Constants.MonitorHtmlFile), System.UriKind.Absolute);
+
+            // Initialize WebView2 wrapper
+            browser = new WebView2SyncWrapper(this.webView);
+
             this.screensaver = screensaver;
             this.id = id;
             this.Text = "Monitor " + Convert.ToString(this.id+1) + " " + AppSettings.Name;
             this.history = new List<long>();
-            this.browser.DocumentCompleted += new System.Windows.Forms.WebBrowserDocumentCompletedEventHandler(this.DocumentCompleted);
         }
 
         public Monitor(Rectangle Bounds, int id, Screensaver screensaver): this(id, screensaver) {
@@ -110,24 +115,31 @@ namespace RPS {
             this.InvokeScript("setClockFormat", new string[] { this.screensaver.config.getPersistantString("clockFormatM" + (this.id + 1)) });
         }
 
-        private void DocumentCompleted(object sender, System.Windows.Forms.WebBrowserDocumentCompletedEventArgs e) {
-            // Correct document loaded (not about:blank)
-            //MessageBox.Show("Monitor Document Completed: " + Constants.getDataFolder(Constants.ConfigHtmlFile));
+        private void WebView_NavigationCompleted(object sender, Microsoft.Web.WebView2.Core.CoreWebView2NavigationCompletedEventArgs e) {
+            if (!e.IsSuccess) {
+                MessageBox.Show($"Navigation failed: {e.WebErrorStatus}", "Navigation Error");
+                return;
+            }
 
-            if (this.browser.Url.Segments.Last().Equals(Constants.MonitorHtmlFile)) {
+            // Check if correct document loaded (not about:blank)
+            if (this.webView.Source != null && this.webView.Source.Segments.Last().Equals(Constants.MonitorHtmlFile)) {
 
                 string classes = "monitor" + (this.id + 1);
                 if (this.screensaver.monitors.Length > 1) classes += " multimonitor";
                 if (this.screensaver.readOnly) classes += " readonly";
-                // TODO: Update Monitor.cs to use WebView2 (Phase 3 of migration)
-                // Config.SetWebViewBodyClasses(...) needs to be called here after Monitor migrates to WebView2
-                
-                this.browser.Document.GetElementById("identify").InnerText = Convert.ToString(this.id+1);
-                this.browser.Show();
-                // Focus browser to ensure key strokes are previewed
-//                this.browser.PreviewKeyDown += this.screensaver.PreviewKeyDown;
-                this.browser.Focus();
-                
+
+                // Set body classes using the Config helper
+                this.screensaver.config.SetWebViewBodyClasses(this.browser, this.screensaver.action, classes);
+
+                // Set identify element
+                var identifyElement = browser.GetElementById("identify");
+                if (identifyElement != null) {
+                    identifyElement.InnerText = Convert.ToString(this.id+1);
+                }
+
+                // Focus webView to ensure key strokes are captured
+                this.webView.Focus();
+
                 // Remove form's PreviewKeyDown to avoid duplicated keys
                 this.PreviewKeyDown -= this.screensaver.PreviewKeyDown;
 
@@ -140,9 +152,30 @@ namespace RPS {
             }
         }
 
-        private void Monitor_Load(object sender, EventArgs e) {
-            this.browser.AllowWebBrowserDrop = false;
-            this.browser.ObjectForScripting = this;
+        private async void Monitor_Load(object sender, EventArgs e) {
+            try {
+                // Initialize WebView2 asynchronously with this Monitor instance as host object
+                await browser.InitializeAsync(this, "monitor");
+
+                // Set up virtual host name mapping for local files
+                string dataFolder = Path.GetDirectoryName(Constants.getDataFolder(Constants.MonitorHtmlFile));
+                this.webView.CoreWebView2.SetVirtualHostNameToFolderMapping(
+                    "rps.local", 
+                    dataFolder, 
+                    Microsoft.Web.WebView2.Core.CoreWebView2HostResourceAccessKind.Allow);
+
+                // Set up navigation completed handler
+                this.webView.NavigationCompleted += WebView_NavigationCompleted;
+
+                _isWebViewInitialized = true;
+
+                // Navigate using virtual host name
+                browser.Navigate($"https://rps.local/{Constants.MonitorHtmlFile}");
+            }
+            catch (Exception ex) {
+                MessageBox.Show($"Failed to initialize WebView2: {ex.Message}\n\nPlease ensure WebView2 Runtime is installed.", 
+                    "WebView2 Initialization Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
 
             this.timer.Interval = 1;
             this.startTimer();
@@ -167,7 +200,7 @@ namespace RPS {
                 previousInfo = this.priorityInfo;
                 this.priorityInfo = info;
                 try {
-                    this.browser.Document.InvokeScript("showPriorityInfo", new String[] { info, Convert.ToString(fade) });
+                    this.browser.InvokeScript("showPriorityInfo", info, Convert.ToString(fade));
                 } catch (Exception e) {
                     Debug.WriteLine("showInfoOnMonitor " + e.Message);
                     // TODO: log to debug file?
@@ -176,21 +209,21 @@ namespace RPS {
             } else {
                 previousInfo = this.info;
                 this.info = info;
-                this.browser.Document.InvokeScript("showInfo", new String[] { info, Convert.ToString(fade) });
+                this.browser.InvokeScript("showInfo", info, Convert.ToString(fade));
             }
             return previousInfo;
         }
 
         public void downloadProgressIndicator(int i) {
-            this.browser.Document.InvokeScript("downloadProgressIndicator", new String[] { Convert.ToString(i) });
+            this.browser.InvokeScript("downloadProgressIndicator", Convert.ToString(i));
         }
 
         public void hideUpdateInfo() {
-            this.browser.Document.InvokeScript("hideUpdateInfo", new String[] { });
+            this.browser.InvokeScript("hideUpdateInfo");
         }
 
         public void showUpdateInfo(string info) {
-            this.browser.Document.InvokeScript("showUpdateInfo", new String[] { info });
+            this.browser.InvokeScript("showUpdateInfo", info);
         }
 
         public long imageId() {
@@ -212,16 +245,16 @@ namespace RPS {
             string md = this.quickMetadata.fillTemplate();
             if (md != null || md != "") {
                 if (this.browser.InvokeRequired) {
-                    this.browser.Document.InvokeScript("showMetadata", new String[] { Convert.ToString(md) });
+                    this.browser.InvokeScript("showMetadata", Convert.ToString(md));
                 } else {
-                    this.browser.Document.InvokeScript("showMetadata", new String[] { Convert.ToString(md) });
+                    this.browser.InvokeScript("showMetadata", Convert.ToString(md));
                 }
-                
+
             }
         }*/
 
-        public Object InvokeScript(string script, string[] parameters) {
-            return this.browser.Document.InvokeScript(script, parameters);
+        public Object InvokeScript(string script, params string[] parameters) {
+            return this.browser.InvokeScript(script, parameters);
         }
 
         public bool backupImageCheck(bool backItUp) {
@@ -245,7 +278,7 @@ namespace RPS {
             //Console.WriteLine("exifRotate: " + this.imageSettings["exifRotate"]);
             this.imageSettings["exifRotate"] = (deg + Convert.ToInt32(this.imageSettings["exifRotate"])) % 360;
             this.resizeRatio(Convert.ToInt32(this.imageSettings["exifRotate"]));
-            this.browser.Document.InvokeScript("setImageRotation", new Object[] { Convert.ToString(this.imageSettings["exifRotate"]), this.imageSettings["resizeRatio"] });
+            this.browser.InvokeScript("setImageRotation", Convert.ToString(this.imageSettings["exifRotate"]), this.imageSettings["resizeRatio"].ToString());
 
             if (this.screensaver.config.getPersistantBool("saveExifOnRotation")) {
                 bool backedUp = backupImageCheck(this.screensaver.config.getPersistantBool("backupExifOnRotation"));
@@ -625,7 +658,7 @@ namespace RPS {
                         }
                         this.showInfoOnMonitor(this.info, false, true);
                         try {
-                            this.browser.Document.InvokeScript("showImage", new Object[] { e.Result, "<span class='folder'>" + Convert.ToString(this.currentImage["path"]) + "</span>", JsonConvert.SerializeObject(this.imageSettings) });
+                            this.browser.InvokeScript("showImage", Convert.ToString(e.Result), "<span class='folder'>" + Convert.ToString(this.currentImage["path"]) + "</span>", JsonConvert.SerializeObject(this.imageSettings));
                         } catch (Exception f) {
                             this.showInfoOnMonitor(f.Message, true);
                         }
@@ -641,20 +674,22 @@ namespace RPS {
 
         public string saveDebug() {
             string filename = "_M" + (this.id + 1) + "_" + DateTime.Now.ToString("yyyyMMddhhmmss") + ".html";
-            string path = this.browser.Url.LocalPath.Replace(Constants.MonitorHtmlFile, filename);
+            string path = this.webView.Source.LocalPath.Replace(Constants.MonitorHtmlFile, filename);
             try {
                 string log;
                 log = "<!--" + Environment.NewLine + JsonConvert.SerializeObject(this.currentImage) + Environment.NewLine + "-->";
-                File.WriteAllText(path, this.browser.Document.GetElementsByTagName("HTML")[0].OuterHtml + Environment.NewLine + log);
+                string html = this.browser.GetDocumentHTML();
+                File.WriteAllText(path, html + Environment.NewLine + log);
             } catch (Exception) {
                 path = Path.Combine(Constants.getProgramDataFolder(), Constants.DataFolder, filename);
                 try {
-                    File.WriteAllText(path, this.browser.Document.GetElementsByTagName("HTML")[0].OuterHtml);
+                    string html = this.browser.GetDocumentHTML();
+                    File.WriteAllText(path, html);
                 } catch (Exception e) {
                     this.showInfoOnMonitor("Error exporting HTML to '" + path + "'" + Environment.NewLine + e.Message, false, true);
                     return null;
                 }
-            } 
+            }
             this.info = this.showInfoOnMonitor("HTML exported to " + path, false, false);
             return path;
         }

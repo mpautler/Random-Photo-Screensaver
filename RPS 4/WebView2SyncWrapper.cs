@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
@@ -23,6 +24,24 @@ namespace RPS
         {
             _webView = webView ?? throw new ArgumentNullException(nameof(webView));
             _helper = new WebView2Helper(_webView);
+        }
+
+        /// <summary>
+        /// Initialize WebView2 asynchronously
+        /// </summary>
+        public async Task InitializeAsync(object hostObject = null, string hostObjectName = "config")
+        {
+            if (_isInitialized) return;
+
+            try
+            {
+                await _helper.InitializeAsync(hostObject, hostObjectName);
+                _isInitialized = true;
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"WebView2 initialization failed: {ex.Message}", ex);
+            }
         }
 
         /// <summary>

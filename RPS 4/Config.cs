@@ -88,16 +88,28 @@ namespace RPS {
             return this.dbConnector.connection;
         }
 
-        private void Config_Load(object sender, EventArgs e) {
+        private async void Config_Load(object sender, EventArgs e) {
             try {
-                // Initialize WebView2 synchronously with this Config instance as host object
-                browser.Initialize(this, "config");
-                webUpdateCheck.Initialize(null);
+                // Initialize WebView2 asynchronously with a COM-visible host object
+                var hostObject = new ConfigHostObject(this);
+                await browser.InitializeAsync(hostObject, "config");
+                await webUpdateCheck.InitializeAsync(null);
+
+                // Set up virtual host name mapping for local files
+                // This allows relative paths in HTML (js/, css/, vendor/) to work correctly
+                string dataFolder = Path.GetDirectoryName(Constants.getDataFolder(Constants.ConfigHtmlFile));
+                this.webView.CoreWebView2.SetVirtualHostNameToFolderMapping(
+                    "rps.local", 
+                    dataFolder, 
+                    Microsoft.Web.WebView2.Core.CoreWebView2HostResourceAccessKind.Allow);
 
                 // Set up navigation completed handler
                 this.webView.NavigationCompleted += WebView_NavigationCompleted;
 
                 _isWebViewInitialized = true;
+
+                // Navigate using virtual host name
+                browser.Navigate($"https://rps.local/{Constants.ConfigHtmlFile}");
             }
             catch (Exception ex) {
                 MessageBox.Show($"Failed to initialize WebView2: {ex.Message}\n\nPlease ensure WebView2 Runtime is installed.", 
@@ -682,12 +694,30 @@ namespace RPS {
         }
 
         public object getPersistant(string key) {
-            if (this.persistant == null || !this.persistant.ContainsKey(key)) throw new KeyNotFoundException(key);
+            if (this.persistant == null) {
+                var ex = new KeyNotFoundException($"Configuration not loaded yet. Attempted to access key: '{key}'");
+                System.Diagnostics.Debug.WriteLine($"[Config] getPersistant KeyNotFoundException: {ex.Message}");
+                throw ex;
+            }
+            if (!this.persistant.ContainsKey(key)) {
+                var ex = new KeyNotFoundException($"Configuration key not found: '{key}'. Available keys: {string.Join(", ", this.persistant.Keys.Take(10))}");
+                System.Diagnostics.Debug.WriteLine($"[Config] getPersistant KeyNotFoundException: {ex.Message}");
+                throw ex;
+            }
             return persistant[key];
         }
 
         public bool getPersistantBool(string key) {
-            if (!this.persistant.ContainsKey(key)) throw new KeyNotFoundException(key);
+            if (this.persistant == null) {
+                var ex = new KeyNotFoundException($"Configuration not loaded yet. Attempted to access key: '{key}'");
+                System.Diagnostics.Debug.WriteLine($"[Config] getPersistantBool KeyNotFoundException: {ex.Message}");
+                throw ex;
+            }
+            if (!this.persistant.ContainsKey(key)) {
+                var ex = new KeyNotFoundException($"Configuration key not found: '{key}'. Available keys: {string.Join(", ", this.persistant.Keys.Take(10))}");
+                System.Diagnostics.Debug.WriteLine($"[Config] getPersistantBool KeyNotFoundException: {ex.Message}");
+                throw ex;
+            }
             if (this.persistant[key].GetType() == typeof(bool)) {
                 return (bool)this.persistant[key];
             }

@@ -46,6 +46,9 @@ namespace RPS
                 _webView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
                 _webView.CoreWebView2.Settings.AreDevToolsEnabled = true; // Enable for debugging
                 _webView.CoreWebView2.Settings.IsStatusBarEnabled = false;
+                _webView.CoreWebView2.Settings.IsScriptEnabled = true; // Ensure JavaScript is enabled
+                _webView.CoreWebView2.Settings.AreDefaultScriptDialogsEnabled = true; // Allow alert/confirm dialogs
+                _webView.CoreWebView2.Settings.IsWebMessageEnabled = true; // Enable web messaging
 
                 _isInitialized = true;
                 _initializationTcs.TrySetResult(true);

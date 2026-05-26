@@ -27,20 +27,22 @@ namespace RPS {
         private void InitializeComponent() {
             this.components = new System.ComponentModel.Container();
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(Monitor));
-            this.browser = new System.Windows.Forms.WebBrowser();
+            this.webView = new Microsoft.Web.WebView2.WinForms.WebView2();
             this.timer = new System.Windows.Forms.Timer(this.components);
+            ((System.ComponentModel.ISupportInitialize)(this.webView)).BeginInit();
             this.SuspendLayout();
             // 
-            // browser
+            // webView
             // 
-            this.browser.AllowWebBrowserDrop = false;
-            this.browser.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.browser.IsWebBrowserContextMenuEnabled = false;
-            this.browser.Location = new System.Drawing.Point(0, 0);
-            this.browser.MinimumSize = new System.Drawing.Size(20, 20);
-            this.browser.Name = "browser";
-            this.browser.Size = new System.Drawing.Size(617, 401);
-            this.browser.TabIndex = 0;
+            this.webView.AllowExternalDrop = false;
+            this.webView.CreationProperties = null;
+            this.webView.DefaultBackgroundColor = System.Drawing.Color.Black;
+            this.webView.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.webView.Location = new System.Drawing.Point(0, 0);
+            this.webView.Name = "webView";
+            this.webView.Size = new System.Drawing.Size(617, 401);
+            this.webView.TabIndex = 0;
+            this.webView.ZoomFactor = 1D;
             // 
             // timer
             // 
@@ -53,7 +55,7 @@ namespace RPS {
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(617, 401);
             this.ControlBox = false;
-            this.Controls.Add(this.browser);
+            this.Controls.Add(this.webView);
             this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.None;
             this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
             this.KeyPreview = true;
@@ -61,13 +63,14 @@ namespace RPS {
             this.StartPosition = System.Windows.Forms.FormStartPosition.Manual;
             this.Text = "Monitor #";
             this.Load += new System.EventHandler(this.Monitor_Load);
+            ((System.ComponentModel.ISupportInitialize)(this.webView)).EndInit();
             this.ResumeLayout(false);
 
         }
 
         #endregion
 
-        public System.Windows.Forms.WebBrowser browser;
+        public Microsoft.Web.WebView2.WinForms.WebView2 webView;
         public System.Windows.Forms.Timer timer;
 
     }
