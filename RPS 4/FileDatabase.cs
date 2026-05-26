@@ -403,7 +403,7 @@ namespace RPS {
                 if (!this.readOnly && this.metaDataTransaction != null && this.metaDataTransaction.Connection != null) {
                     this.metaDataTransaction.Commit();
                 }
-                if (!closeOnly) this.metaDataTransaction = this.metaDataDbConnector.connection.BeginTransaction(true);
+                if (!closeOnly) this.metaDataTransaction = this.metaDataDbConnector.connection.BeginTransaction();
             } catch (System.Data.SQLite.SQLiteException se) {
                 if (se.ErrorCode == DBConnector.DatabaseIsLocked) {
                     this.readOnly = true;
