@@ -104,12 +104,12 @@
     <PackageReference Include="System.Management" Version="9.0.0" />
     <PackageReference Include="TaskScheduler" Version="2.12.2" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="vendor\exiftool.exe">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>vendor\exiftool.exe</Link>
+    </None>
+  </ItemGroup>
   <PropertyGroup>
-    <!-- Post-build event disabled - needs manual review of paths
-    <PostBuildEvent>IF EXIST "$(ProjectDir)vendor" (
-  IF NOT EXIST "$(TargetDir)vendor" MKDIR "$(TargetDir)vendor"
-  xcopy /d /s /y /i "$(ProjectDir)vendor\*" "$(TargetDir)vendor\"
-)</PostBuildEvent>
-    -->
   </PropertyGroup>
 </Project>
