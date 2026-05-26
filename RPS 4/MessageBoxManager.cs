@@ -1,14 +1,10 @@
 ﻿#pragma warning disable 0618
 
 using System;
-
 using System.Text;
-
 using System.Runtime.InteropServices;
 
-using System.Security.Permissions;
-
-[assembly: SecurityPermission(SecurityAction.RequestMinimum, UnmanagedCode = true)]
+// Note: SecurityPermission removed - Code Access Security is obsolete in modern .NET
 
 namespace System.Windows.Forms {
 

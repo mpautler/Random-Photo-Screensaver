@@ -47,7 +47,7 @@ namespace RPS {
             else return new SortOrder(Direction.ASC);
         }
 
-        public string ToString() {
+        public override string ToString() {
             if (this.direction == Direction.DESC) return "DESC";
             else return "ASC";
         }
